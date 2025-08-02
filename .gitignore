@@ -1,2 +1,7 @@
 venv/
+# Environment variables
 .env
+
+# Python compiled files and caches
+*.pyc
+__pycache__/
