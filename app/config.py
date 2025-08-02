@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     max_chunk_size: int = 800
     chunk_overlap: int = 100
     max_chunks_per_query: int = 5
+    app_url: str = "http://localhost:8000"
+    app_name: str = "Document QA App"
     
     class Config:
         env_file = ".env"

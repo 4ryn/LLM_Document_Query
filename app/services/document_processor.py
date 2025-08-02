@@ -4,6 +4,7 @@ from docx import Document as DocxDocument
 import io
 from typing import List, Dict, Any
 import logging
+from urllib.parse import urlparse, unquote
 from app.config import settings
 from app.utils.helpers import optimize_memory, log_memory_usage, chunk_text_optimized
 
@@ -12,6 +13,53 @@ logger = logging.getLogger(__name__)
 class DocumentProcessor:
     def __init__(self):
         self.max_file_size = 10 * 1024 * 1024  # 10MB limit
+    
+    def get_file_type_from_url(self, url: str) -> str:
+        """Extract file type from URL, handling query parameters and URL encoding"""
+        try:
+            # Parse the URL to get the path
+            parsed_url = urlparse(url)
+            path = parsed_url.path
+            
+            # URL decode the path
+            decoded_path = unquote(path)
+            
+            # Extract file extension
+            if decoded_path.lower().endswith('.pdf'):
+                return 'pdf'
+            elif decoded_path.lower().endswith('.docx'):
+                return 'docx'
+            elif decoded_path.lower().endswith('.doc'):
+                return 'doc'
+            else:
+                return 'unknown'
+                
+        except Exception as e:
+            logger.error(f"Error determining file type from URL: {e}")
+            return 'unknown'
+    
+    def get_file_type_from_content(self, content: bytes) -> str:
+        """Determine file type from content headers"""
+        try:
+            # Check PDF signature
+            if content.startswith(b'%PDF'):
+                return 'pdf'
+            
+            # Check DOCX signature (ZIP file with specific structure)
+            if content.startswith(b'PK\x03\x04'):
+                # This could be a DOCX (which is a ZIP file)
+                # We could do more sophisticated checking here
+                return 'docx'
+            
+            # Check DOC signature
+            if content.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
+                return 'doc'
+                
+            return 'unknown'
+            
+        except Exception as e:
+            logger.error(f"Error determining file type from content: {e}")
+            return 'unknown'
     
     async def download_document(self, url: str) -> bytes:
         """Download document with memory optimization"""
@@ -91,13 +139,20 @@ class DocumentProcessor:
             # Download document
             content = await self.download_document(url)
             
+            # Determine file type from URL first, then from content
+            file_type = self.get_file_type_from_url(url)
+            if file_type == 'unknown':
+                file_type = self.get_file_type_from_content(content)
+            
+            logger.info(f"Detected file type: {file_type}")
+            
             # Extract text based on file type
-            if url.lower().endswith('.pdf'):
+            if file_type == 'pdf':
                 text = self.extract_text_from_pdf(content)
-            elif url.lower().endswith('.docx'):
+            elif file_type in ['docx', 'doc']:
                 text = self.extract_text_from_docx(content)
             else:
-                raise ValueError("Unsupported file type. Only PDF and DOCX are supported.")
+                raise ValueError(f"Unsupported file type: {file_type}. Only PDF and DOCX are supported.")
             
             # Limit text size to prevent memory issues
             max_text_size = 50000  # 50k characters
@@ -125,6 +180,7 @@ class DocumentProcessor:
                 "chunks": chunks,
                 "metadata": {
                     "url": url,
+                    "file_type": file_type,
                     "text_length": len(text),
                     "chunk_count": len(chunks)
                 }
