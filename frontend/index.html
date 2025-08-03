@@ -138,8 +138,8 @@ What is the waiting period for pre-existing diseases?"></textarea>
             
             try {
                 showResponse('Processing... Please wait...', 'success');
-                
-                const response = await fetch(`${baseUrl}/api/v1/hackrx/run`, {
+                // removed  /api/v1/hackrx/run
+                const response = await fetch(`${baseUrl}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
